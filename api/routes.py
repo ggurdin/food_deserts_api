@@ -1,6 +1,5 @@
 from api import app
 from flask import request
-import json
 import os
 import pymysql
 from dotenv import load_dotenv
@@ -28,29 +27,97 @@ else:
 def index():
 	return "Index"
 
-@app.route("/api/counties")
-def counties():
+@app.route("/<type>/")
+def urban(type):
+	if type not in ["urban", "rural"]:
+		return {"status": "not found"}
+	county = None
+	if "county" in request.args:
+		county = request.args["county"].lower()
+	type_flag = 0
+	if type == "urban":
+		type_flag = 1
 	with cnx.cursor() as cursor:
-		cursor.execute("SELECT DISTINCT county FROM tract_demographics;")
-		result = cursor.fetchall()
-		ret = json.dumps({"counties": [x[0] for x in result]})
-		cnx.close()
-	return ret
+		sql = f"SELECT tract_id FROM food_desert_data WHERE is_urban = {type_flag}"
+		if county:
+			sql = sql + f' AND county = "{county}"'
+		cursor.execute(sql)
+		ret = cursor.fetchall()
+		tract_ids = {"tracts": [x[0] for x in ret]}
+	return tract_ids
 
-@app.route("/api/demographic_info")
-def demographics():
-	county = request.args['county'].lower()
+@app.route("/low_income/")
+def low_income():
+	county = None
+	if "county" in request.args:
+		county = request.args["county"].lower()
 	with cnx.cursor() as cursor:
-		cursor.execute("SELECT DISTINCT county FROM tract_demographics;")
-		result = cursor.fetchall()
-		counties = [x[0].lower() for x in result]
-		if county in counties:
-			county_data_sql = f"SELECT tract_id, low_income, proverty_rate, median_family_income, population_2010 FROM tract_demographics WHERE LOWER(county) LIKE '{county}';"
-			cursor.execute(county_data_sql)
-			result = cursor.fetchall()
-			ret = {"county_data": []}
-			for x in result:
-				ret["county_data"].append({"census_tract": x[0], "low_income": x[1], "proverty_rate": x[2], "median_family_income": x[3], "population_2010": x[4]})
-			return json.dumps(ret)
-		else:
-			return json.dumps({"status": "not found"})
+		sql = "SELECT tract_id FROM food_desert_data WHERE low_income = 1"
+		if county:
+			sql = sql + f' AND LOWER(county) LIKE "{county}";'
+		print(sql)
+		cursor.execute(sql)
+		ret = cursor.fetchall()
+		tract_ids = {"tracts": [x[0] for x in ret]}
+	return tract_ids
+
+@app.route("/<lila>/<distance>/")
+def li_distance(lila, distance):
+	if lila not in ["low_income", "low_access"]:
+		return {"status": "not found"}
+	county = None
+	if "county" in request.args:
+		county = request.args["county"].lower()
+	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"]:
+		return {"status": "not found"}
+	with cnx.cursor() as cursor:
+		sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1"
+		if lila == "low_income":
+			sql = sql + " AND low_income = 1"
+		if county:
+			sql = sql + f' AND county LIKE "{county}"'
+		cursor.execute(sql)
+		ret = cursor.fetchall()
+		tract_ids = {"tracts": [x[0] for x in ret]}
+	return tract_ids
+
+@app.route("/<lila>/vehicle")
+def li_vehicle(lila):
+	if lila not in ["low_income", "low_access"]:
+		return {"status": "not found"}
+	county = None
+	if "county" in request.args:
+		county = request.args["county"].lower()
+	with cnx.cursor() as cursor:
+		sql = f"SELECT tract_id FROM food_desert_data WHERE low_vehicle_access = 1"
+		if lila == "low_income":
+			sql = sql + " AND low_income = 1"
+		if county:
+			sql = sql + f' AND county LIKE "{county}"'
+		cursor.execute(sql)
+		ret = cursor.fetchall()
+		tract_ids = {"tracts": [x[0] for x in ret]}
+	return tract_ids
+
+@app.route("/<lila>/<distance>/<type>")
+def li_distance_type(lila, distance, type):
+	if lila not in ["low_income", "low_access"]:
+		return {"status": "not found"}
+	county = None
+	if "county" in request.args:
+		county = request.args["county"].lower()
+	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"] or type not in ["urban", "rural"]:
+		return {"status": "not found"}
+	type_flag = 0
+	if type == "urban":
+		type_flag = 1
+	with cnx.cursor() as cursor:
+		sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1 AND is_urban = {type_flag}"
+		if lila == "low_income":
+			sql = sql + " AND low_income = 1"
+		if county:
+			sql = sql + f' AND county LIKE "{county}"'
+		cursor.execute(sql)
+		ret = cursor.fetchall()
+		tract_ids = {"tracts": [x[0] for x in ret]}
+	return tract_ids
