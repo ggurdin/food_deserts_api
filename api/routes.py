@@ -27,7 +27,7 @@ else:
 def index():
 	return "Index"
 
-@app.route("/<type>/")
+@app.route("/api/<type>/")
 def urban(type):
 	if type not in ["urban", "rural"]:
 		return {"status": "not found"}
@@ -46,7 +46,7 @@ def urban(type):
 		tract_ids = {"tracts": [x[0] for x in ret]}
 	return tract_ids
 
-@app.route("/low_income/")
+@app.route("/api/low_income/")
 def low_income():
 	county = None
 	if "county" in request.args:
@@ -61,7 +61,7 @@ def low_income():
 		tract_ids = {"tracts": [x[0] for x in ret]}
 	return tract_ids
 
-@app.route("/<lila>/<distance>/")
+@app.route("/api/<lila>/<distance>/")
 def li_distance(lila, distance):
 	if lila not in ["low_income", "low_access"]:
 		return {"status": "not found"}
@@ -81,7 +81,7 @@ def li_distance(lila, distance):
 		tract_ids = {"tracts": [x[0] for x in ret]}
 	return tract_ids
 
-@app.route("/<lila>/vehicle")
+@app.route("/api/<lila>/vehicle")
 def li_vehicle(lila):
 	if lila not in ["low_income", "low_access"]:
 		return {"status": "not found"}
@@ -99,7 +99,7 @@ def li_vehicle(lila):
 		tract_ids = {"tracts": [x[0] for x in ret]}
 	return tract_ids
 
-@app.route("/<lila>/<distance>/<type>")
+@app.route("/api/<lila>/<distance>/<type>")
 def li_distance_type(lila, distance, type):
 	if lila not in ["low_income", "low_access"]:
 		return {"status": "not found"}
@@ -121,3 +121,71 @@ def li_distance_type(lila, distance, type):
 		ret = cursor.fetchall()
 		tract_ids = {"tracts": [x[0] for x in ret]}
 	return tract_ids
+
+@app.route("/api/tract_demographics/")
+def tract_info():
+	if "tract_id" not in request.args:
+		return {"status": "not found"}
+	tract_id = int(request.args["tract_id"])
+	with cnx.cursor() as cursor:
+		sql = f"""
+			SELECT 
+				county,
+				is_urban,
+				population,
+				housing_units,
+				living_in_gqtrs AS living_in_group_quarters,
+				poverty_rate,
+				median_family_income,
+				low_income_pop AS low_income_population,
+				kids_pop AS child_population, 
+				seniors_pop AS senior_population, 
+				white_pop AS white_population, 
+				black_pop AS black_population, 
+				asain_pop AS asian_population, 
+				pacific_pop AS native_hawaiian_and_pacific_islander_population, 
+				native_pop AS native_american_and_native_alaskan_population, 
+				other_pop AS mixed_race_and_other_population, 
+				latino_pop AS hispanic_and_latino_population, 
+				vehicle_pop AS housing_units_without_vehicle_access, 
+				snap_pop AS housing_units_on_snap
+			FROM food_desert_data
+			WHERE tract_id = {tract_id}
+		"""
+		cursor.execute(sql)
+		columns = cursor.description 
+		resp = list(cursor.fetchone())
+		columns = [x[0] for x in columns]
+		return {key: value for key, value in zip(columns, resp)}
+
+@app.route("/api/access/<distance>")
+def access(distance):
+	if "tract_id" not in request.args:
+		return {"status": "not found"}
+	tract_id = int(request.args["tract_id"])
+	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"]:
+		return {"status": "not found"}
+	with cnx.cursor() as cursor:
+		sql = f"""
+			SELECT
+				la_pop_{distance} AS low_access_population,
+				lali_pop_{distance} AS low_access_low_income_population,
+				la_kids_{distance} AS low_access_child_population,
+				la_seniors_{distance} AS low_access_senior_population,
+				la_white_{distance} AS low_access_white_population,
+				la_black_{distance} AS low_access_black_population,
+				la_asian_{distance} AS low_access_asian_population,
+				la_pacific_{distance} AS low_access_hawaiian_and_pacific_islander_population,
+				la_native_{distance} AS low_access_native_american_and_native_alaskan_population,
+				la_other_{distance} AS low_access_mixed_race_and_other_population,
+				la_latino_{distance} AS low_access_hispanic_and_latino_population,
+				la_vehicle_{distance} AS housing_units_without_vehicle_access,
+				la_snap_{distance} AS low_access_housing_units_on_snap
+			FROM food_desert_data
+			WHERE tract_id = {tract_id}
+		"""
+		cursor.execute(sql)
+		columns = cursor.description 
+		resp = list(cursor.fetchone())
+		columns = [x[0] for x in columns]
+		return {key: value for key, value in zip(columns, resp)}
