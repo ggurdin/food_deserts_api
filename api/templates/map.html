@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Richmond Food Deserts</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div style="display: flex; justify-content: center;">
+        <div class="chart" id="map" style="margin-top: 5%; width: 75%;">
+    </div>
+    </div>
+    <script>
+        var map = {{ map | safe }};
+        Plotly.plot("map", map, {}, {displayModeBar: false});
+    </script>
+</body>
+</html>

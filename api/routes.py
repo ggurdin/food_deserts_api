@@ -3,6 +3,14 @@ from flask import request
 import os
 import pymysql
 from dotenv import load_dotenv
+from flask import render_template
+import json
+from google.cloud import storage
+import requests
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly
 
 
 if os.environ.get('GAE_ENV') == 'standard':
@@ -22,10 +30,55 @@ else:
 	db_host = os.environ.get('DB_HOST')
 	cnx = pymysql.connect(user=db_user, password=db_password, host=db_host, db=db_name)
 
+def get_geojson():
+    client = storage.Client()
+    bucket_name = "richmond_geojsonn"
+    bucket = client.get_bucket(bucket_name)
+    blob = bucket.blob('new_richmond.json')
+    return json.loads(blob.download_as_string(client=None))
+
+def get_tract_df():
+	tract_data = requests.get("https://richmondfooddeserts.com/api/tract_demographics/")
+	tract_data = tract_data.json()
+	df = pd.DataFrame.from_records(tract_data["demographics"])
+	df = df[["census_tract", "county", "median_family_income", "population"]]
+	df = df.rename({
+		"census_tract": "Census Tract",
+		"county": "County",
+		"median_family_income": "Median Family Income",
+		"population": "Population"
+	}, axis=1)
+	return df
+
+def create_map(geojson, df):
+	customdata = np.stack((df['Census Tract'], df['County'], df['Median Family Income'].astype(int)), axis=-1)
+	fig = go.Figure(data=go.Choropleth(
+		locations=df['Census Tract'],
+		geojson=geojson,
+		z = df['Population'],
+		featureidkey="properties.GEO_ID",
+		showscale=False,
+		customdata=customdata,
+		hovertemplate = (
+			'Census Tract: %{customdata[0]}<br>' +
+			'County: %{customdata[1]}<br>' + 
+			'Population: %{customdata[2]}<br>' + 
+			'<extra></extra>'
+		)
+	))    
+	fig.update_geos(fitbounds="locations", showcoastlines=False, showland=False, showframe=False)
+	fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+	fig.update_layout(dragmode=False)
+	return fig
+
 
 @app.route("/")
 def index():
-	return "Index"
+	geojson = get_geojson()
+	df = get_tract_df()
+	map = create_map(geojson, df)
+	map = json.dumps(map, cls=plotly.utils.PlotlyJSONEncoder)
+	return render_template("map.html", map=map)
 
 @app.route("/api/<type>/")
 def urban(type):
@@ -124,39 +177,44 @@ def li_distance_type(lila, distance, type):
 
 @app.route("/api/tract_demographics/")
 def tract_info():
-	if "tract_id" not in request.args:
-		return {"status": "not found"}
-	tract_id = int(request.args["tract_id"])
+	sql = f"""
+		SELECT 
+			tract_id AS census_tract,
+			county,
+			is_urban,
+			population,
+			housing_units,
+			living_in_gqtrs AS living_in_group_quarters,
+			poverty_rate,
+			median_family_income,
+			low_income_pop AS low_income_population,
+			kids_pop AS child_population, 
+			seniors_pop AS senior_population, 
+			white_pop AS white_population, 
+			black_pop AS black_population, 
+			asain_pop AS asian_population, 
+			pacific_pop AS native_hawaiian_and_pacific_islander_population, 
+			native_pop AS native_american_and_native_alaskan_population, 
+			other_pop AS mixed_race_and_other_population, 
+			latino_pop AS hispanic_and_latino_population, 
+			vehicle_pop AS housing_units_without_vehicle_access, 
+			snap_pop AS housing_units_on_snap
+		FROM food_desert_data
+	"""
+	if "tract_id" in request.args:
+		tract_id = int(request.args["tract_id"])
+		sql = sql + f" WHERE tract_id = {tract_id}"
 	with cnx.cursor() as cursor:
-		sql = f"""
-			SELECT 
-				county,
-				is_urban,
-				population,
-				housing_units,
-				living_in_gqtrs AS living_in_group_quarters,
-				poverty_rate,
-				median_family_income,
-				low_income_pop AS low_income_population,
-				kids_pop AS child_population, 
-				seniors_pop AS senior_population, 
-				white_pop AS white_population, 
-				black_pop AS black_population, 
-				asain_pop AS asian_population, 
-				pacific_pop AS native_hawaiian_and_pacific_islander_population, 
-				native_pop AS native_american_and_native_alaskan_population, 
-				other_pop AS mixed_race_and_other_population, 
-				latino_pop AS hispanic_and_latino_population, 
-				vehicle_pop AS housing_units_without_vehicle_access, 
-				snap_pop AS housing_units_on_snap
-			FROM food_desert_data
-			WHERE tract_id = {tract_id}
-		"""
 		cursor.execute(sql)
 		columns = cursor.description 
-		resp = list(cursor.fetchone())
+		resp = list(cursor.fetchall())
 		columns = [x[0] for x in columns]
-		return {key: value for key, value in zip(columns, resp)}
+		print(resp)
+		print(columns)
+		ret = {"demographics": []}
+		for tract in resp:
+			ret["demographics"].append({key: value for key, value in zip(columns, tract)})
+	return ret
 
 @app.route("/api/access/<distance>")
 def access(distance):
