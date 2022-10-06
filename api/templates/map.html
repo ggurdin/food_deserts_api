@@ -3,16 +3,179 @@
 <head lang="en">
     <meta charset="UTF-8">
     <title>Richmond Food Deserts</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-</head>
-<body>
-    <div style="display: flex; justify-content: center;">
-        <div class="chart" id="map" style="margin-top: 5%; width: 75%;">
-    </div>
-    </div>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>   
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
     <script>
-        var map = {{ map | safe }};
-        Plotly.plot("map", map, {}, {displayModeBar: false});
+
+        function unpack(rows, key) {
+            return rows.map(function(row) { return row[key]; });
+        }
+
+        function stack(rows) {
+            let ret = [] 
+            for (var i = 0; i < rows[0].length; i++) {
+                let temp = []
+                for (j = 0; j < rows.length; j++) {
+                    temp.push(rows[j][i])
+                }
+                ret.push(temp)
+            }
+            return ret
+        }
+
+        function get_demographics_data() {
+            var endpoint = "{{ api_endpoint }}tract_demographics/"
+            return $.ajax({
+                url: endpoint,
+                headers: {'x-access-token': '{{ api_key }}'},
+                dataType: 'json'
+            })
+        }
+
+        function get_distance_data(distance) {
+            var endpoint = `{{ api_endpoint }}access/${distance}`
+            return $.ajax({
+                url: endpoint,
+                headers: {'x-access-token': '{{ api_key }}'},
+                dataType: 'json'
+            })
+        }
+
+        $(function() {
+            var endpoint = "{{ api_endpoint }}tract_demographics/"
+            $.ajax({
+                url: endpoint,
+                headers: {'x-access-token': '{{ api_key }}'},
+                dataType: 'json',
+                success: function(result){
+                    var rows = result["demographics"]
+                    let geojson = '{{ geojson }}'.replaceAll("&#39;", '"')
+                    geojson = JSON.parse(geojson)
+                    
+                    let customdata = [];
+                    customdata.push(unpack(rows, 'county'));
+                    customdata.push(unpack(rows, 'population'));
+                    customdata = stack(customdata);
+
+                    var data = [{
+                        type: 'choropleth',
+                        locations: unpack(rows, 'census_tract'),
+                        customdata: customdata,
+                        z: unpack(rows, 'population'),
+                        geojson: geojson,
+                        featureidkey: "properties.GEO_ID",
+                        colorscale: [
+                            [0, 'rgb(230,240,245)'], [0.2, 'rgb(201,218,233)'],
+                            [0.4, 'rgb(162,190,218)'], [0.6, 'rgb(141,126,187)'],
+                            [0.8, 'rgb(134,58,151)'], [1, 'rgb(84,2,83)']
+                        ],
+                        showscale: false,
+                        hovertemplate: "%{customdata[0]}<br>Population: %{customdata[1]}<extra></extra>"
+                    }];
+                    var layout = {
+                        dragmode: false,
+
+                        geo: {
+                            fitbounds: "locations",
+                            showcoastlines: false, 
+                            showland: false, 
+                            showframe: false
+                        },
+                        
+                        margin: {"r":0,"t":0,"l":0,"b":0},
+                    }
+
+                    var mapDiv = document.getElementById('map');
+                    Plotly.newPlot(mapDiv, data, layout, {displayModeBar: false})
+                }
+            })
+        });
+
+        $(function() {
+
+            var mapDiv = document.getElementById('map');
+
+            $("input").on("click", function() {
+                $("input").removeClass("active");
+                $(this).addClass("active");
+            });
+
+            $("#population-btn").on("click", function() {
+                var promise = get_demographics_data()
+                .then(data => {
+                    data = data['demographics']
+                    population = unpack(data, 'population')
+                    mapDiv.data[0].z = population
+                    mapDiv.data[0].hovertemplate = "%{customdata[0]}<br>Population: %{z}<extra></extra>"
+                    Plotly.redraw(mapDiv)
+                })
+                .catch(error => console.log('Error:', error));
+            });
+
+            $("#income-btn").on("click", function() {
+                var promise = get_demographics_data()
+                .then(data => {
+                    data = data['demographics']
+                    population = unpack(data, 'median_family_income')
+                    mapDiv.data[0].z = population
+                    mapDiv.data[0].hovertemplate = "%{customdata[0]}<br>Median Income: %{z}<extra></extra>"
+                    Plotly.redraw(mapDiv)
+                })
+                .catch(error => console.log('Error:', error));
+            });
+
+            $("#distance_dropdown > input").on("click", function() {
+                var distance = $(this).attr("name")
+                var promise = get_distance_data(distance)
+                .then(data => {
+                    data = data['demographics']
+                    la_population = unpack(data, 'low_access_population')
+                    mapDiv.data[0].z = la_population
+                    mapDiv.data[0].hovertemplate = "%{customdata[0]}<br>Low Access Population: %{z}<extra></extra>"
+                    Plotly.redraw(mapDiv)
+                })
+                .catch(error => console.log('Error:', error));
+            });
+
+        });
+
     </script>
+
+</head>
+
+<style>
+    #update-buttons {
+        display: flex;
+        justify-content: center;
+        margin-top: 2.5%;
+        margin-left: 2.5%;
+        margin-right: 2.5%;
+    }
+
+    #update-buttons > * {
+        margin-right: 5px;
+        margin-left: 5px;
+    }
+</style>
+
+<body>
+    <div id="update-buttons">
+        <input id="population-btn" type="button" value="Population" class="btn btn-secondary btn-sm shadow-none active">
+        <input id="income-btn" type="button" value="Median Income" class="btn btn-secondary shadow-none btn-sm">
+        <input class="btn btn-secondary dropdown-toggle btn-sm shadow-none" type="button" id="dropdownMenuButton" data-toggle="dropdown" value="Low Access"></input>
+        <div id="distance_dropdown" class="dropdown-menu">
+            <input id="half-mile-btn" name="half_mile" type="button" class="dropdown-item btn-sm shadow-none" value="1/2 Mile"></input>
+            <input id="one-mile-btn" name="one_mile" type="button" class="dropdown-item btn-sm shadow-none" value="1 Mile"></input>
+            <input id="ten-mile-btn" name="ten_miles" type="button" class="dropdown-item btn-sm shadow-none" value="10 Miles"></input>
+            <input id="twenty-mile-btn" name="twenty_miles" type="button" class="dropdown-item btn-sm shadow-none" value="20 Miles"></input>
+        </div>
+    </div>
+    <div id="map" style="display: flex; justify-content: center;"></div>
+    <div id="hoverinfo"></div>
 </body>
 </html>
