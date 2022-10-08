@@ -1,0 +1,14 @@
+* {
+    font-family: 'Quicksand', sans-serif;
+}
+
+#update-buttons {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+#update-buttons > * {
+    margin-right: 5px;
+    margin-left: 5px;
+}

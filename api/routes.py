@@ -18,8 +18,8 @@ if os.environ.get('GAE_ENV') == 'standard':
 	db_host = os.environ.get('DB_HOST')
 	unix_socket = '/cloudsql/{}'.format(db_connection_name)
 	cnx = pymysql.connect(user=db_user, password=db_password, unix_socket=unix_socket, db=db_name)
-	api_endpoint = "https://richmondfooddeserts.com/api/"
-	api_key = os.environ.get("API_KEY")
+	api_endpoint = "https://richmondfooddeserts.com/api"
+	
 
 else:
 	load_dotenv()
@@ -28,8 +28,10 @@ else:
 	db_name = os.environ.get('DB_NAME')
 	db_host = os.environ.get('DB_HOST')
 	cnx = pymysql.connect(user=db_user, password=db_password, host=db_host, db=db_name)
-	api_endpoint = "http://127.0.0.1:5000/api/"
-	api_key = os.environ.get("API_KEY")
+	api_endpoint = "http://127.0.0.1:5000/api"
+
+api_key = os.environ.get("API_KEY")
+mapbox_key = os.environ.get("MAPBOX_KEY")
 
 def token_required(f):
 	@wraps(f)
@@ -54,110 +56,45 @@ def get_geojson():
 @app.route("/")
 def index():
 	geojson = get_geojson()
-	return render_template("map.html", geojson=geojson, api_endpoint=api_endpoint, api_key=api_key)
+	return render_template(
+		"map.html", 
+		geojson=geojson, 
+		api_endpoint=api_endpoint, 
+		api_key=api_key,
+		mapbox_key = mapbox_key
+	)
 
-@app.route("/api/<type>/")
+@app.route("/api/tract_info/<tract_id>")
 @token_required
-def urban(type):
-	if type not in ["urban", "rural"]:
+def tract_info(tract_id):
+	if not tract_id:
 		return {"status": "not found"}
-	county = None
-	if "county" in request.args:
-		county = request.args["county"].lower()
-	type_flag = 0
-	if type == "urban":
-		type_flag = 1
+	sql = f"""
+		SELECT 
+			tract_id AS census_tract,
+			county,
+			population,
+			poverty_rate,
+			median_family_income,
+			low_income_pop AS low_income_population,
+			vehicle_pop AS housing_units_without_vehicle_access, 
+			snap_pop AS housing_units_on_snap
+		FROM food_desert_data
+		WHERE tract_id = {tract_id}
+	"""
 	with cnx.cursor() as cursor:
-		sql = f"SELECT tract_id FROM food_desert_data WHERE is_urban = {type_flag}"
-		if county:
-			sql = sql + f' AND county = "{county}"'
 		cursor.execute(sql)
-		ret = cursor.fetchall()
-		tract_ids = {"tracts": [x[0] for x in ret]}
-	return tract_ids
-
-@app.route("/api/low_income/")
-@token_required
-def low_income():
-	county = None
-	if "county" in request.args:
-		county = request.args["county"].lower()
-	with cnx.cursor() as cursor:
-		sql = "SELECT tract_id FROM food_desert_data WHERE low_income = 1"
-		if county:
-			sql = sql + f' AND LOWER(county) LIKE "{county}";'
-		cursor.execute(sql)
-		ret = cursor.fetchall()
-		tract_ids = {"tracts": [x[0] for x in ret]}
-	return tract_ids
-
-@app.route("/api/<lila>/<distance>/")
-@token_required
-def li_distance(lila, distance):
-	if lila not in ["low_income", "low_access"]:
-		return {"status": "not found"}
-	county = None
-	if "county" in request.args:
-		county = request.args["county"].lower()
-	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"]:
-		return {"status": "not found"}
-	with cnx.cursor() as cursor:
-		sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1"
-		if lila == "low_income":
-			sql = sql + " AND low_income = 1"
-		if county:
-			sql = sql + f' AND county LIKE "{county}"'
-		cursor.execute(sql)
-		ret = cursor.fetchall()
-		tract_ids = {"tracts": [x[0] for x in ret]}
-	return tract_ids
-
-@app.route("/api/<lila>/vehicle")
-@token_required
-def li_vehicle(lila):
-	if lila not in ["low_income", "low_access"]:
-		return {"status": "not found"}
-	county = None
-	if "county" in request.args:
-		county = request.args["county"].lower()
-	with cnx.cursor() as cursor:
-		sql = f"SELECT tract_id FROM food_desert_data WHERE low_vehicle_access = 1"
-		if lila == "low_income":
-			sql = sql + " AND low_income = 1"
-		if county:
-			sql = sql + f' AND county LIKE "{county}"'
-		cursor.execute(sql)
-		ret = cursor.fetchall()
-		tract_ids = {"tracts": [x[0] for x in ret]}
-	return tract_ids
-
-@app.route("/api/<lila>/<distance>/<type>")
-@token_required
-def li_distance_type(lila, distance, type):
-	if lila not in ["low_income", "low_access"]:
-		return {"status": "not found"}
-	county = None
-	if "county" in request.args:
-		county = request.args["county"].lower()
-	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"] or type not in ["urban", "rural"]:
-		return {"status": "not found"}
-	type_flag = 0
-	if type == "urban":
-		type_flag = 1
-	with cnx.cursor() as cursor:
-		sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1 AND is_urban = {type_flag}"
-		if lila == "low_income":
-			sql = sql + " AND low_income = 1"
-		if county:
-			sql = sql + f' AND county LIKE "{county}"'
-		cursor.execute(sql)
-		ret = cursor.fetchall()
-		tract_ids = {"tracts": [x[0] for x in ret]}
-	return tract_ids
+		columns = cursor.description 
+		resp = list(cursor.fetchall())
+		columns = [x[0] for x in columns]
+		ret = {"demographics": []}
+		for tract in resp:
+			ret["demographics"].append({key: value for key, value in zip(columns, tract)})
+	return ret
 
 @app.route("/api/tract_demographics/")
 @token_required
-def tract_info():
+def tract_demographics():
 	sql = f"""
 		SELECT 
 			tract_id AS census_tract,
@@ -233,3 +170,102 @@ def access(distance):
 		for tract in resp:
 			ret["demographics"].append({key: value for key, value in zip(columns, tract)})
 	return ret
+
+# @app.route("/api/<type>/")
+# @token_required
+# def urban(type):
+# 	if type not in ["urban", "rural"]:
+# 		return {"status": "not found"}
+# 	county = None
+# 	if "county" in request.args:
+# 		county = request.args["county"].lower()
+# 	type_flag = 0
+# 	if type == "urban":
+# 		type_flag = 1
+# 	with cnx.cursor() as cursor:
+# 		sql = f"SELECT tract_id FROM food_desert_data WHERE is_urban = {type_flag}"
+# 		if county:
+# 			sql = sql + f' AND county = "{county}"'
+# 		cursor.execute(sql)
+# 		ret = cursor.fetchall()
+# 		tract_ids = {"tracts": [x[0] for x in ret]}
+# 	return tract_ids
+
+# @app.route("/api/low_income/")
+# @token_required
+# def low_income():
+# 	county = None
+# 	if "county" in request.args:
+# 		county = request.args["county"].lower()
+# 	with cnx.cursor() as cursor:
+# 		sql = "SELECT tract_id FROM food_desert_data WHERE low_income = 1"
+# 		if county:
+# 			sql = sql + f' AND LOWER(county) LIKE "{county}";'
+# 		cursor.execute(sql)
+# 		ret = cursor.fetchall()
+# 		tract_ids = {"tracts": [x[0] for x in ret]}
+# 	return tract_ids
+
+# @app.route("/api/<lila>/<distance>/")
+# @token_required
+# def li_distance(lila, distance):
+# 	if lila not in ["low_income", "low_access"]:
+# 		return {"status": "not found"}
+# 	county = None
+# 	if "county" in request.args:
+# 		county = request.args["county"].lower()
+# 	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"]:
+# 		return {"status": "not found"}
+# 	with cnx.cursor() as cursor:
+# 		sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1"
+# 		if lila == "low_income":
+# 			sql = sql + " AND low_income = 1"
+# 		if county:
+# 			sql = sql + f' AND county LIKE "{county}"'
+# 		cursor.execute(sql)
+# 		ret = cursor.fetchall()
+# 		tract_ids = {"tracts": [x[0] for x in ret]}
+# 	return tract_ids
+
+# @app.route("/api/<lila>/vehicle")
+# @token_required
+# def li_vehicle(lila):
+# 	if lila not in ["low_income", "low_access"]:
+# 		return {"status": "not found"}
+# 	county = None
+# 	if "county" in request.args:
+# 		county = request.args["county"].lower()
+# 	with cnx.cursor() as cursor:
+# 		sql = f"SELECT tract_id FROM food_desert_data WHERE low_vehicle_access = 1"
+# 		if lila == "low_income":
+# 			sql = sql + " AND low_income = 1"
+# 		if county:
+# 			sql = sql + f' AND county LIKE "{county}"'
+# 		cursor.execute(sql)
+# 		ret = cursor.fetchall()
+# 		tract_ids = {"tracts": [x[0] for x in ret]}
+# 	return tract_ids
+
+# @app.route("/api/<lila>/<distance>/<type>")
+# @token_required
+# def li_distance_type(lila, distance, type):
+# 	if lila not in ["low_income", "low_access"]:
+# 		return {"status": "not found"}
+# 	county = None
+# 	if "county" in request.args:
+# 		county = request.args["county"].lower()
+# 	if distance not in ["half_mile", "one_mile", "ten_miles", "twenty_miles"] or type not in ["urban", "rural"]:
+# 		return {"status": "not found"}
+# 	type_flag = 0
+# 	if type == "urban":
+# 		type_flag = 1
+# 	with cnx.cursor() as cursor:
+	# 	sql = f"SELECT tract_id FROM food_desert_data WHERE la_{distance} = 1 AND is_urban = {type_flag}"
+	# 	if lila == "low_income":
+	# 		sql = sql + " AND low_income = 1"
+	# 	if county:
+	# 		sql = sql + f' AND county LIKE "{county}"'
+	# 	cursor.execute(sql)
+	# 	ret = cursor.fetchall()
+	# 	tract_ids = {"tracts": [x[0] for x in ret]}
+	# return tract_ids
