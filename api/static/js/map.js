@@ -9,16 +9,15 @@ function update_info_text(data) {
         return accumulator + value;
     }, 0);
 
-    income = income.reduce((accumulator, value) => {
-        return accumulator + value;
-    }, 0);
+    income = income.reduce((a, b) => a + b, 0) / income.length;
+    income = income.toFixed(2)
 
     low_income = low_income.reduce((accumulator, value) => {
         return accumulator + value;
     }, 0);
 
     $("#population-txt").text(population)
-    $("#income-txt").text(income)
+    $("#income-txt").text("$" + income)
     $("#low-income-txt").text(low_income)
 }
 
@@ -38,6 +37,7 @@ function make_map(locations, z, customdata, geojson) {
         showscale: false,
         hovertemplate: "%{customdata[0]}<br>Population: %{customdata[1]}<extra></extra>",
         marker: {"opacity": 0.5},
+        selected: {marker: {opacity: 0.8}}
     }];
 
     var layout = {
@@ -98,5 +98,53 @@ function update_buttons(mapDiv, endpoint, key) {
         .catch(error => console.log('Error:', error));
 
         $("#dropdownMenuButton").addClass("active");
+    });
+}
+
+function set_select_events(mapDiv) {
+    mapDiv.on("plotly_click", function(data) {
+        var customdata = data.points[0].customdata
+        var county = customdata[0]
+        var population = customdata[1]
+        var median_income = customdata[2]
+        var low_income = customdata[3]
+        var tract = data.points[0].location
+
+        $("#location-txt").html(`${county}<br><span style="font-size: 16px;">Census Tract #${tract}</span>`)
+        $("#population-txt").text(population)
+        $("#income-txt").text("$" + median_income)
+        $("#low-income-txt").text(low_income)
+
+        var center = data.points[0].ct
+        center = {lon: center[0], lat: center[1]}
+
+        var tract_idx = data.points[0].pointIndex;
+        mapDiv.data[0].selectedpoints = [tract_idx]
+        Plotly.redraw(mapDiv)
+    })
+
+    mapDiv.on('plotly_doubleclick', function() {
+        var demographics = stack(mapDiv.data[0].customdata)
+
+        var population = demographics[1].reduce((accumulator, value) => {
+            return accumulator + value;
+        }, 0);
+    
+        var income = demographics[2]
+        income = income.reduce((a, b) => a + b, 0) / income.length;
+        income = income.toFixed(2)
+    
+        var low_income = demographics[3].reduce((accumulator, value) => {
+            return accumulator + value;
+        }, 0);
+    
+        $("#location-txt").text("Greater Richmond Area")
+        $("#population-txt").text(population)
+        $("#income-txt").text("$" + income)
+        $("#low-income-txt").text(low_income)
+
+        mapDiv.data[0].selectedpoints = null
+        mapDiv.data[0].marker.opacity = 0.5
+        Plotly.redraw(mapDiv)
     });
 }

@@ -33,6 +33,8 @@
                 let customdata = [];
                 customdata.push(unpack(rows, 'county'));
                 customdata.push(unpack(rows, 'population'));
+                customdata.push(unpack(rows, 'median_family_income'));
+                customdata.push(unpack(rows, 'low_income_population'));
                 customdata = stack(customdata);
 
                 var locations = unpack(rows, "census_tract")
@@ -47,6 +49,7 @@
                     mapboxAccessToken: mapbox_key
                 }
                 Plotly.newPlot(mapDiv, data, layout, config)
+                set_select_events(mapDiv);
                 mapDiv.on('plotly_relayout', function(eventdata){
                     if (mapDiv.layout.mapbox.zoom < 7.7) {
                         mapDiv.layout.mapbox.zoom = 7.7
@@ -93,7 +96,7 @@
 
         <div id="info-column">
             <div id="info-title">
-                <h3 style="text-align: center; margin-left: 20px; margin-right: 20px;">Greater Richmond Area</h3>
+                <h3 id="location-txt" style="text-align: center; margin-left: 20px; margin-right: 20px;">Greater Richmond Area</h3>
             </div>
             <div id="info-box">
                 <span style="font-weight: 800;">Population:<br></span>&emsp;&emsp;<span id="population-txt">[Population]</span>
