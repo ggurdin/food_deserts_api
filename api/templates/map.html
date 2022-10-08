@@ -28,6 +28,8 @@
             var promise = get_demographics_data(endpoint, key)
             promise.then((result) => {
                 var rows = result["demographics"]
+                update_info_text(rows)
+
                 let customdata = [];
                 customdata.push(unpack(rows, 'county'));
                 customdata.push(unpack(rows, 'population'));
@@ -40,12 +42,18 @@
                 var mapDiv = document.getElementById('map');
 
                 var mapbox_key = "{{ mapbox_key }}"
-                var config = {
-                    scrollZoom: false, 
+                var config = { 
                     displayModeBar: false, 
                     mapboxAccessToken: mapbox_key
                 }
                 Plotly.newPlot(mapDiv, data, layout, config)
+                mapDiv.on('plotly_relayout', function(eventdata){
+                    if (mapDiv.layout.mapbox.zoom < 7.7) {
+                        mapDiv.layout.mapbox.zoom = 7.7
+                        mapDiv.layout.mapbox.center = {lon: -77.434769, lat: 37.4}
+                        Plotly.redraw(mapDiv)
+                    }
+                });
             })
             .catch(error => console.log('Error:', error));
 
@@ -58,22 +66,45 @@
 </head>
 
 <body>
-    <div style="width: 100%; margin-top: 20px;">
-        <h2 id="static-title" style="text-align: center;">Richmond Food Access</h2>
-        <h2 id="dynamic-title" style="text-align: center; display: none;"></h2>
-    </div>
-    <div id="update-buttons">
-        <input id="population-btn" type="button" value="Population" class="btn btn-secondary btn-sm shadow-none active">
-        <input id="income-btn" type="button" value="Median Income" class="btn btn-secondary shadow-none btn-sm">
-        <input class="btn btn-secondary dropdown-toggle btn-sm shadow-none" type="button" id="dropdownMenuButton" data-toggle="dropdown" value="Low Access"></input>
-        <div id="distance_dropdown" class="dropdown-menu">
-            <input id="half-mile-btn" name="half_mile" type="button" class="dropdown-item btn-sm shadow-none" value="1/2 Mile"></input>
-            <input id="one-mile-btn" name="one_mile" type="button" class="dropdown-item btn-sm shadow-none" value="1 Mile"></input>
-            <input id="ten-mile-btn" name="ten_miles" type="button" class="dropdown-item btn-sm shadow-none" value="10 Miles"></input>
-            <input id="twenty-mile-btn" name="twenty_miles" type="button" class="dropdown-item btn-sm shadow-none" value="20 Miles"></input>
+    <div id="wrapper">
+        <div id="nav-column">
+            <div id="population-nav" class="nav-box">
+                <button id="population-btn" class="btn btn-secondary btn-sm shadow-none nav-btn active">Population</button>
+            </div>
+            <div id="income-nav" class="nav-box">
+                <button id="income-btn" type="button" class="btn btn-secondary shadow-none btn-sm nav-btn">Median Income</button>
+            </div>
+            <div id="low-access-nav" class="nav-box">
+                <button class="btn btn-secondary dropdown-toggle btn-sm shadow-none nav-btn" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Low Access
+                  </button>
+                  <div id="distance_dropdown" class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                      <button id="half-mile-btn" name="half_mile" class="dropdown-item btn-sm shadow-none">1/2 Mile</button>
+                      <button id="one-mile-btn" name="one_mile" class="dropdown-item btn-sm shadow-none">1 Mile</button>
+                      <button id="ten-mile-btn" name="ten_miles" class="dropdown-item btn-sm shadow-none">10 Miles</button>
+                      <button id="twenty-mile-btn" name="twenty_miles" class="dropdown-item btn-sm shadow-none">20 Miles</button>
+                  </div>
+            </div>
         </div>
+
+        <div id="map-column">
+            <div id="map"></div>
+        </div>
+
+        <div id="info-column">
+            <div id="info-title">
+                <h3 style="text-align: center; margin-left: 20px; margin-right: 20px;">Greater Richmond Area</h3>
+            </div>
+            <div id="info-box">
+                <span style="font-weight: 800;">Population:<br></span>&emsp;&emsp;<span id="population-txt">[Population]</span>
+                <br>
+                <span style="font-weight: 800;">Median Income:<br></span>&emsp;&emsp;<span id="income-txt">[Median Income]</span>
+                <br>
+                <span style="font-weight: 800;">Low Income Population:<br></span>&emsp;&emsp;<span id="low-income-txt">[Low Income]</span>
+            </div>
+        </div>
+
     </div>
-    <div id="map" style="display: flex; justify-content: center; margin-top: 15px;"></div>
-    <div id="hoverinfo"></div>
+
 </body>
 </html>

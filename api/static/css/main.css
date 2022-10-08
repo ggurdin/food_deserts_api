@@ -2,13 +2,76 @@
     font-family: 'Quicksand', sans-serif;
 }
 
-#update-buttons {
-    display: flex;
-    justify-content: center;
-    margin-top: 15px;
+body {
+    height: 90vh;
 }
 
-#update-buttons > * {
-    margin-right: 5px;
-    margin-left: 5px;
+#wrapper {
+    display: grid;
+    margin: 20px;
+    margin-left: 100px;
+    margin-right: 100px;
+    height: 100%;
+    grid-template-columns: 1fr 700px 1fr;
+    grid-template-rows: 1fr;
+    column-gap: 10px;
+    row-gap: 10px;
+    grid-template-areas: 
+        ". . ."
+        "nav map info";
+}
+
+#nav-column {
+    border: 2px solid rgba(0, 0, 0, 0.6);
+    grid-area: nav;
+    display: grid;
+    height: 100%;
+    grid-template-rows: 2fr 1fr 1fr 1fr 2fr;
+    grid-template-areas: "." "population" "income" "low-access" ".";
+}
+
+.nav-box {
+    grid-area: population;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-btn {
+    width: 80%;
+    height: 90%;
+}
+
+#income-nav {
+    grid-area: income;
+}
+
+#low-access-nav {
+    grid-area: low-access;
+}
+
+#map-column {
+    grid-area: map;
+    display: flex;
+}
+
+#info-column {
+    border: 2px solid rgba(0, 0, 0, 0.6);
+    grid-area: info;
+    display: grid;
+    grid-template-rows: 0.5fr 1fr 4fr;
+    grid-template-areas: "." "info-title" "info-box";
+}
+
+#info-title {
+    grid-area: info-title;
+    display: flex;
+    align-items: center;
+}
+
+#info-box {
+    grid-area: info-box;
+    padding: 10px;
+    padding-left: 20px;
+    font-size: 18px;
 }

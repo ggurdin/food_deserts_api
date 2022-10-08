@@ -1,5 +1,27 @@
 /* function for making and updating plotly map */
 
+function update_info_text(data) {
+    var population = unpack(data, "population")
+    var income = unpack(data, "median_family_income")
+    var low_income = unpack(data, "low_income_population")
+    
+    population = population.reduce((accumulator, value) => {
+        return accumulator + value;
+    }, 0);
+
+    income = income.reduce((accumulator, value) => {
+        return accumulator + value;
+    }, 0);
+
+    low_income = low_income.reduce((accumulator, value) => {
+        return accumulator + value;
+    }, 0);
+
+    $("#population-txt").text(population)
+    $("#income-txt").text(income)
+    $("#low-income-txt").text(low_income)
+}
+
 function make_map(locations, z, customdata, geojson) {
     var data = [{
         type: 'choroplethmapbox',
@@ -15,17 +37,17 @@ function make_map(locations, z, customdata, geojson) {
         ],
         showscale: false,
         hovertemplate: "%{customdata[0]}<br>Population: %{customdata[1]}<extra></extra>",
-        marker: {"opacity": 0.5}
+        marker: {"opacity": 0.5},
     }];
 
     var layout = {
         dragmode: false,
-        width: 650, 
-        height: 550, 
+        width: 700, 
+        height: 600, 
         mapbox: {
             style: 'dark',
             center: {lon: -77.434769, lat: 37.4}, 
-            zoom: 7.7,
+            zoom: 7.7
         }, 
         margin: {"r":0,"t":0,"l":0,"b":0}
     };
@@ -33,8 +55,8 @@ function make_map(locations, z, customdata, geojson) {
 }
 
 function update_buttons(mapDiv, endpoint, key) {
-    $("input").on("click", function() {
-        $("input").removeClass("active");
+    $("button").on("click", function() {
+        $("button").removeClass("active");
         $(this).addClass("active");
     });
     
@@ -62,7 +84,7 @@ function update_buttons(mapDiv, endpoint, key) {
         .catch(error => console.log('Error:', error));
     });
 
-    $("#distance_dropdown > input").on("click", function() {
+    $("#distance_dropdown > button").on("click", function() {
         var distance = $(this).attr("name")
 
         get_distance_data(distance, endpoint, key)
@@ -78,26 +100,3 @@ function update_buttons(mapDiv, endpoint, key) {
         $("#dropdownMenuButton").addClass("active");
     });
 }
-
-// mapDiv.on('plotly_click', function(data) {
-//     var county = data.points[0].customdata[0]
-//     var tract = data.points[0].location
-//     $("#static-title").hide()
-//     $("#dynamic-title").text(`Census Tract #${tract}\t${county}`)
-//     $("#dynamic-title").show()
-
-//     var tract_id = data.points[0].location
-//     let geojson = '{{ geojson }}'.replaceAll("&#39;", '"')
-//     geojson = JSON.parse(geojson)
-
-//     for (var i = 0; i < geojson.features.length; i++) {
-//         if (geojson.features[i].properties.GEO_ID == tract_id) {
-//             geojson.features = geojson.features[i]
-//             break
-//         }
-//     }
-//     mapDiv.layout.mapbox.zoom *= 1.3
-//     var center = data.points[0].ct
-//     mapDiv.layout.mapbox.center = {"lat": center[1], "lon": center[0]}
-//     Plotly.redraw(mapDiv)
-// });
